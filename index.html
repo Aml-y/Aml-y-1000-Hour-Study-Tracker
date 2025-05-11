@@ -1,0 +1,267 @@
+
+<!-- this's the  code-->
+<!DOCTYPE html>
+<html lang="English" >
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title> 📚 1000 Hour Study Tracker</title>
+  <style>
+    :root {
+      --main-bg: #f9f9f9;
+      --card-bg: #ffffff;
+      --text-color: #333;
+      --accent: #27ae60;
+      --danger: #e74c3c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--main-bg);
+      color: var(--text-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+    }
+
+    h1 {
+      margin-bottom: 1rem;
+      font-size: 2rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 1rem;
+      padding: 2rem;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    canvas {
+      margin: 1rem auto;
+      display: block;
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      padding: 0.6rem;
+      margin: 0.5rem 0;
+      border: 1px solid #ccc;
+      border-radius: 0.5rem;
+    }
+
+    button {
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 0.6rem 1.2rem;
+      margin: 0.3rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: #219150;
+    }
+
+    .danger {
+      background: var(--danger);
+    }
+
+    .danger:hover {
+      background: #c0392b;
+    }
+
+    #log {
+      text-align: right;
+      padding: 0;
+      list-style: none;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    @media (max-width: 600px) {
+      .card {
+        padding: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>📚1000 Hour Study Tracker</h1>
+  <div class="card">
+    <select id="subject" onchange="changeSubject()"></select>
+    <input type="text" id="newSubject" placeholder="Add New Subject" />
+    <button onclick="addSubject()">Add</button>
+
+    <canvas id="circle-timer" width="200" height="200"></canvas>
+    <div id="timer-display">00:00:00</div>
+    <div>
+      <button onclick="startTimer()">▶️ Start</button>
+      <button onclick="pauseTimer()">⏸️ Pause</button>
+      <button class="danger" onclick="resetTimer()">🔄 Reset Timer</button>
+    </div>
+
+    <p>Remaining Hours:<span id="remaining">1000</span> Hours</p>
+    <p>Total Studied: <span id="studied">0</span> Hours</p>
+    <h3>Study Log :-</h3>
+    <ul id="log"></ul>
+  </div>
+
+  <script>
+    let subjects = JSON.parse(localStorage.getItem("subjects")) || {
+       "English ": { remaining: 1000, log: [] },
+      "Programming": { remaining: 1000, log: [] }
+    };
+    let currentSubject = localStorage.getItem("currentSubject") || "English";
+    let timer = null;
+    let sessionSeconds = 0;
+
+    const subjectSelect = document.getElementById("subject");
+    const remainingDisplay = document.getElementById("remaining");
+    const studiedDisplay = document.getElementById("studied");
+    const timerDisplay = document.getElementById("timer-display");
+    const canvas = document.getElementById("circle-timer");
+    const ctx = canvas.getContext("2d");
+
+    function populateSubjects() {
+      subjectSelect.innerHTML = '';
+      for (let subject in subjects) {
+        const studied = subjects[subject].log.reduce((sum, e) => sum + e.hours, 0);
+        const option = document.createElement("option");
+        option.value = subject;
+        option.textContent = `${subject} (Studied: ${studied.toFixed(1)} Hours)`;
+        if (subject === currentSubject) option.selected = true;
+        subjectSelect.appendChild(option);
+      }
+      updateDisplay();
+    }
+
+    function changeSubject() {
+      currentSubject = subjectSelect.value;
+      localStorage.setItem("currentSubject", currentSubject);
+      updateDisplay();
+    }
+
+    function addSubject() {
+      const newSub = document.getElementById("newSubject").value.trim();
+      if (newSub && !subjects[newSub]) {
+        subjects[newSub] = { remaining: 1000, log: [] };
+        currentSubject = newSub;
+        localStorage.setItem("subjects", JSON.stringify(subjects));
+        localStorage.setItem("currentSubject", currentSubject);
+        populateSubjects();
+        document.getElementById("newSubject").value = '';
+      }
+    }
+
+    function startTimer() {
+      if (timer) return;
+      timer = setInterval(() => {
+        sessionSeconds++;
+        updateTimerDisplay();
+        drawCircle();
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      if (!timer) return;
+      clearInterval(timer);
+      timer = null;
+
+      const hours = sessionSeconds / 3600;
+      if (hours > 0) {
+        const today = new Date().toLocaleDateString();
+        subjects[currentSubject].remaining -= hours;
+        if (subjects[currentSubject].remaining < 0) subjects[currentSubject].remaining = 0;
+        subjects[currentSubject].log.push({ date: today, hours: parseFloat(hours.toFixed(3)) });
+        localStorage.setItem("subjects", JSON.stringify(subjects));
+      }
+      sessionSeconds = 0;
+      updateTimerDisplay();
+      populateSubjects();
+      drawCircle();
+    }
+
+    function resetTimer() {
+      clearInterval(timer);
+      timer = null;
+      sessionSeconds = 0;
+      updateTimerDisplay();
+      drawCircle();
+    }
+
+    function updateTimerDisplay() {
+      const hours = Math.floor(sessionSeconds / 3600);
+      const minutes = Math.floor((sessionSeconds % 3600) / 60);
+      const seconds = sessionSeconds % 60;
+      timerDisplay.textContent = `${hours.toString().padStart(2, '0')}:` +
+        `${minutes.toString().padStart(2, '0')}:` +
+        `${seconds.toString().padStart(2, '0')}`;
+    }
+
+    function updateDisplay() {
+      const subject = subjects[currentSubject];
+      const totalStudied = subject.log.reduce((sum, e) => sum + e.hours, 0);
+      remainingDisplay.textContent = subject.remaining.toFixed(1);
+      studiedDisplay.textContent = totalStudied.toFixed(1);
+
+      const log = document.getElementById("log");
+      log.innerHTML = '';
+      subject.log.forEach(entry => {
+        const li = document.createElement("li");
+        li.textContent = `${entry.date} — ${entry.hours.toFixed(2)} hours`;
+        log.appendChild(li);
+      });
+
+      drawCircle();
+    }
+
+    function drawCircle() {
+      const subject = subjects[currentSubject];
+      const totalHours = 1000;
+      const studied = subject.log.reduce((sum, e) => sum + e.hours, 0) + sessionSeconds / 3600;
+      const percentage = Math.min(studied / totalHours, 1);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = 80;
+
+      // الخلفية الرمادية
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = "#ccc";
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      // الجزء الأخضر
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, -Math.PI / 2, 2 * Math.PI * percentage - Math.PI / 2);
+      ctx.strokeStyle = "#27ae60";
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      // النص
+      ctx.font = "16px Arial";
+      ctx.fillStyle = "#333";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${Math.floor(studied)} / 1000 Hours`, centerX, centerY);
+    }
+
+    populateSubjects();
+  </script>
+</body>
+</html>
